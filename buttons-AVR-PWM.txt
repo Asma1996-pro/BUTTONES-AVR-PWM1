@@ -1,0 +1,78 @@
+#include <avr/io.h>
+#include <util/delay.h>
+#include <avr/interrupt.h>
+#define BUTTON1 PD0	      // location of button one
+#define BUTTON2 PD1	      // location of button two
+#define B1 1		      // B1 is returned when BUTTON1 is pressed
+#define B2 2	       	  // B2 is returned when BUTTON2 is pressed
+#define NO_BUTTON 0	      // NO_BUTTON is returned when no button is pressed
+#define PWM_FREQ1 8000    //  rquired pwm frequencies for button1
+#define PWM_FREQ2 1000    //  rquired pwm frequencies for button2
+#define PWM_DUTY1 83.0
+#define PWM_DUTY2 18.0      // rquired pwm duty cycles 2
+
+
+unsigned char waitForPress(void)
+{
+    while((PIND & ((1 << BUTTON1)|(1 << BUTTON2))) == ((1 << BUTTON1) |(1<<BUTTON2)))
+	; // wait until any button is pressed
+
+
+    if((PIND & (1 << BUTTON1)) == 0)
+	return B1;
+    else if((PIND & (1 << BUTTON2)) == 0)
+	return B2;
+    else
+	return NO_BUTTON; // no button pressed. This shoudl not happen. Why?
+}
+
+void setPWM(unsigned int pwmFreq, unsigned char pwmDuty)
+{
+
+    // setup timer1 
+    TCCR1A = 0;     // initialize to zero both control registers
+    TCCR1B = 0;     // In most cases, no need to write to TCCRC1
+    
+    cli();	// disable global interrupts so that no interrupts occurs while configuring
+    
+    TCCR1A |=  (( 1 << WGM11 ) | ( 1 << COM1A1)) ;  //choosing  Fast PWM //we are choosing it because we want to use ICRI as top 
+    TCCR1B |=  (( 1 << WGM12 ) | ( 1 << WGM13 ));     
+    ICR1 = ( 16000000.0 / pwmFreq);	                       // phase-correct pwm mode, top = f_clk/(2 * N * f_pwm)
+                                                    // for past-fast pwm mode, top = f_clk/(N * f_pwm) - 1// ICR1 can be used as top value in some modes and in other modes as compare register 
+    OCR1A = ( pwmDuty / 100.0 ) * ICR1;	            // you can use channel A or channel B to set duty cycle.
+		                                                                    // remember that it is a percentage of the top value
+		                                                                               // use the variable pwmDuty
+TCNT1 = 0;      
+    DDRB |= ( 1 << PB0 );       // configure PWM pin as output
+    
+    sei();          // enable global interrupts
+
+    TCCR1B |=  ( 1 << CS10 );	// set appropriate timer clock, based on pwmFreq
+                    
+		//timer starts here 
+}
+
+int main()
+{
+	DDRD &= ~(( 1 << PD0 )|( 1 << PD1 )); 
+	PORTD |= (( 1 << PD0 ) | ( 1 << PD1 )); // enable pull-up
+    unsigned char buttonPressed;
+
+    buttonPressed = waitForPress();
+
+    while(1)
+    {
+	if(buttonPressed == B1) 
+	{
+	  setPWM(PWM_FREQ1, PWM_DUTY1);
+	}
+	else if (buttonPressed == B2)
+	{
+	  setPWM(PWM_FREQ2, PWM_DUTY2);
+	}
+	buttonPressed = waitForPress();
+    } 
+	 //end of while 
+			    return 0;
+
+} 
